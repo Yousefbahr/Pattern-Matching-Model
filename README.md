@@ -49,6 +49,7 @@ In the `testing_model` file, uncomment the following and provide a numpy 1D arra
 - `get_prediction` function takes a model instance, a numpy array of names for the inputs and another of targets.
  It outputs a `Panda DataFrame` of the inputs, matched names, and the probability for each input name.
 - You could provide a list of input names and/or targets from a file
+- Both arrays must be numpy.
   
 Here's a demo.
 ````
