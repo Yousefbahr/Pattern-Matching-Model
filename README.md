@@ -1,7 +1,7 @@
 # Product-Matching-Model
 A pattern-matching model for identifying medication names, utilizing a Siamese network. This model takes an input, which can be in either Arabic or English, and computes a similarity score between the input and a database of formatted medication names. The Siamese network compares the input to the database entries and determines the degree of similarity, helping to identify the most relevant matches.
 
-**The model achieved an accuracy of 98% on test data.**
+**The model achieved an accuracy of 99% on test data.**
 
 
 ## Architecture
