@@ -5,7 +5,7 @@ A pattern-matching model for identifying medication names, utilizing a Siamese n
 The model is designed to process two input sequences. The network includes the following components:
 
 - Input Layer: Two input sequences are passed into the model.
-Masking Layer: Each input sequence is processed through a masking layer to handle variable-length sequences, which masks the padding tokens.
+- Masking Layer: Each input sequence is processed through a masking layer to handle variable-length sequences, which masks the padding tokens.
 - LSTM Layer: The masked inputs are fed into a Long Short-Term Memory (LSTM) layer to extract relevant features.
 - Euclidean Distance Layer: The hidden states of the LSTM for both input sequences are compared using the Euclidean distance function to measure their similarity.
 - Dense Layer: The result of the Euclidean distance is passed through a Dense layer with a sigmoid activation function, providing a final similarity score between the two input sequences.
