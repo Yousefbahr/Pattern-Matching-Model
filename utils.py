@@ -103,23 +103,22 @@ def pre_process_strings(x, Tx, char_to_index, pad_value= -1):
   return indices
 
 
-def pre_process_dataset_training(X, Y,Tx, char_to_index, unique_classes = 500, num_pos_neg = 130):
+def pre_process_dataset_training(X, Y, Tx, char_to_index, unique_classes = 500, num_pos_neg = 130):
   """
   X: array of input strings (samples) of shape(m,) | where m is number of samples
   Y: array of target strings of shape (m,) | where m is number of samples
-  sku: array of sku of shape (m,)
   Tx: sequence length
-  num_pos_neg: is the number of positive and negative samples for each sample
-  char_to_index: a dict mapping all characters in vocab to their indices (0 to vocab_size)
+  num_pos_neg: is the number of positive and negative samples (not combined) for each sample
+  char_to_index: a dict mapping all characters in vocab to their indices (0 to vocab_size - 1)
   unique_classes: number of unqiue classes in the dataset
 
-  returns 80 positve and negative samples for each sample
+  returns 'num_pos_neg' positve and negative samples for each sample
   for negative samples randomly choose another class
 
   new_X: shape(n, 2, Tx)
   new_y: shape(n,)
   n is the new number of samples , which could be different that the original (m)
-  n = num_pos_neg * unique_classes
+  n = num_pos_neg * 2 * unique_classes
   """
 
   X = X.copy()
@@ -200,7 +199,7 @@ def get_prediction(model, input_sentences, Tx, char_to_index ,targets):
   input_sentences: array of strings of medication names
   Tx: sequence length
   char_to_index: a dict mapping characters to indices
-  targets: 1D array of formatted arabic target names 
+  targets: 1D array of formatted Arabic target names 
   
   get prediction using 'input_sentences' from the master file
 
