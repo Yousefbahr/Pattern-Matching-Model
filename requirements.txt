@@ -1,5 +1,5 @@
 numpy
 pandas
-tensorflow
+tensorflow==2.18
 re
 sklearn
