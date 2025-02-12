@@ -3,6 +3,8 @@ A pattern-matching model for identifying medication names, utilizing a Siamese n
 
 **The model achieved an accuracy of 99% on test data.**
 
+**The process of finding a match takes between 200 and 400 milliseconds.**
+
 
 ## Architecture
 The model is designed to process two input sequences. The network includes the following components:
