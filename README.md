@@ -49,7 +49,12 @@ In the `testing_model` file, uncomment the following and provide a numpy 1D arra
 - Both arrays must be numpy.
   
 Here's a demo.
+
 ````
+from utils import *
+from model import Tx, char_to_index
+
+loaded_model = load_model("model.keras", custom_objects={"Model":Model})
 targets = pd.read_excel("Product Matching Dataset.xlsx", sheet_name="Master File")["product_name_ar"]
 
 input = np.array( ["الفانوفا ركزززز",
