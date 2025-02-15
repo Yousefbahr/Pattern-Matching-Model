@@ -50,14 +50,13 @@ In the `testing_model` file, uncomment the following and provide a numpy 1D arra
   
 Here's a demo.
 ````
-targets = np.array(["الفانوفا 20 قرص"
-          , "بانادول اكسترا 30 قرص "])
-
+targets = pd.read_excel("Product Matching Dataset.xlsx", sheet_name="Master File")["product_name_ar"]
 
 input = np.array( ["الفانوفا ركزززز",
         "بانادووووول"])
 
-get_prediction(loaded_model, input, Tx, char_to_index, targets)
+df, preds = get_prediction(loaded_model, input, Tx, char_to_index, targets)
+print(df)
 ````
 Output:
 
