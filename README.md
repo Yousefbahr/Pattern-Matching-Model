@@ -1,9 +1,9 @@
 # Product-Matching-Model
-A pattern-matching model for identifying medication names, utilizing a Siamese network. This model takes an input, which can be in either Arabic or English, and computes a similarity score between the input and a database of formatted medication names. The Siamese network compares the input to the database entries and determines the degree of similarity, helping to identify the most relevant matches.
+The model uses a Siamese network for pattern matching to identify medication names. It accepts inputs in either Arabic or English and calculates a similarity score between the input and entries in a database of formatted medication names. The Siamese network compares the input against each database entry and computes a similarity degree, returning the top k most similar candidates. To refine this process, a string matching algorithm is applied to identify and return the most similar medication name.
 
-**The model achieved an accuracy of 99% on test data.**
-
-**The process of finding a match takes between 200 and 400 milliseconds.**
+- **When the model identifies a match as similar, it is accurate 95% of the time.**
+- **The model successfully classifies 91% of all similar matches correctly.**
+- **The process of finding a match takes between 200 and 400 milliseconds.**
 
 
 ## Architecture
@@ -14,6 +14,8 @@ The model is designed to process two input sequences. The network includes the f
 - LSTM Layer: The masked inputs are fed into a Long Short-Term Memory (LSTM) layer to extract relevant features.
 - Euclidean Distance Layer: The hidden states of the LSTM for both input sequences are compared using the Euclidean distance function to measure their similarity.
 - Dense Layer: The result of the Euclidean distance is passed through a Dense layer with a sigmoid activation function, providing a final similarity score between the two input sequences.
+
+The model returns the top k candidates, and a string-matching algorithm optimizes the selection by choosing the most accurate candidate from them.
 
 ## Input Layer
 The input consists of both positive and negative samples processed from the dataset. 
@@ -33,23 +35,16 @@ The target is of shape (m, ) where each value is either 1 or 0.
     
 ## Usage
     $ pip install -r requirements.txt
-    
-### Predicting the similarity between two names
-In the `testing_model.py` file, uncomment the following and change the names of the two variables `name1` and `name2` to whichever you want and run the file.
-````
-    loaded_model = load_model("model.keras", custom_objects={"Model":Model})
-    name1 = "بانادزل"
-    name2 = "بانادول"
-    input = pre_process_input(name1, name2, Tx, char_to_index)
-    pred = loaded_model.predict(input)
-    probab = np.max(pred)
-  ````
 
 ### Predicting the similarity between a list of unformatted and target formatted names
 
 In the `testing_model` file, uncomment the following and provide a numpy 1D array of names for the input and another numpy 1D array of targets.
 - `get_prediction` function takes a model instance, a numpy array of names for the inputs and another of targets.
- It outputs a `Panda DataFrame` of the inputs, matched names, and the probability for each input name.
+  
+  - It outputs a `Panda DataFrame` of the inputs, matched names, and the probability for each input name.
+  - It also outputs a prediction 1D array of length `number of input names * number of target names`. The input is matched with every name in the               'targets' array. The output is a binary array of only zeros or ones indicating similar or not.
+  
+
 - You could provide a list of input names and/or targets from a file
 - Both arrays must be numpy.
   
