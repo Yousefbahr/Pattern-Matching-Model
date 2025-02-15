@@ -3,3 +3,4 @@ pandas
 tensorflow==2.18.0
 re
 sklearn
+fuzzywuzzy

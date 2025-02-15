@@ -4,12 +4,13 @@ import matplotlib.pyplot as plt
 import re
 import tensorflow as tf
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score
+from sklearn.metrics import accuracy_score, confusion_matrix, precision_score, recall_score
 from tensorflow.keras.layers import Bidirectional, Concatenate, Permute, Dot, Input, LSTM, Multiply, Softmax, Reshape, Embedding
 from tensorflow.keras.layers import RepeatVector, Dense, Activation, Lambda, Masking, Dropout
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.utils import to_categorical
 from tensorflow.keras.models import load_model
+from fuzzywuzzy import fuzz, process
 
 class Model(tf.keras.Model):
   def __init__(self, num_of_layers, hidden_dim ,dropout_rate = 0.3, **kwargs):
@@ -58,6 +59,22 @@ class Model(tf.keras.Model):
     })
     return config
 
+def apply_regex(sentence):
+  """
+  apply regex on a string and return new one
+  """
+  new = re.sub(r"[^a-zA-Z0-9%\.\u0600-\u06FF\s]", " ", sentence)
+  # remove tatweel symbol
+  new = re.sub(r"\u0640", "" , new)
+  # remove tashkeel
+  new = re.sub(r"[\u064B-\u0652]", "", new)
+  # remove arabic punctuation
+  new = re.sub(r"[،؛؟“”‘’•]", "", new)
+  # remove extra spaces
+  new = re.sub(r"^\s+|\s+$|\s{2,}", " ", new).strip()
+  new = re.sub(r"^\s+", " ", new)
+  return new
+
 
 def pre_process_strings(x, Tx, char_to_index, pad_value= -1):
   """
@@ -73,19 +90,7 @@ def pre_process_strings(x, Tx, char_to_index, pad_value= -1):
   """
 
   for i, sentence in enumerate(x.copy()):
-    # remove unwanted symbols
-    new = re.sub(r"[^a-zA-Z0-9%\.\u0600-\u06FF\s]", " ", sentence)
-    # remove tatweel symbol
-    new = re.sub(r"\u0640", "" , new)
-    # remove tashkeel
-    new = re.sub(r"[\u064B-\u0652]", "", new)
-    # remove arabic punctuation
-    new = re.sub(r"[،؛؟“”‘’•]", "", new)
-    # remove extra spaces
-    new = re.sub(r"^\s+|\s+$|\s{2,}", " ", new).strip()
-    new = re.sub(r"^\s+", " ", new)
-    x[i] = new
-
+    x[i] = apply_regex(sentence)
 
   indices = np.full((len(x), Tx), pad_value)
   for i, sentence in enumerate(x):
@@ -99,26 +104,25 @@ def pre_process_strings(x, Tx, char_to_index, pad_value= -1):
         if char in char_to_index:
           indices[i, j] = char_to_index[char]
 
-
   return indices
 
-
-def pre_process_dataset_training(X, Y, Tx, char_to_index, unique_classes = 500, num_pos_neg = 130):
+def pre_process_dataset_training(X, Y, Tx, char_to_index, unique_classes = 500, sample_per_categ = 200 , negative_samples_ratio=0.5):
   """
   X: array of input strings (samples) of shape(m,) | where m is number of samples
   Y: array of target strings of shape (m,) | where m is number of samples
   Tx: sequence length
-  num_pos_neg: is the number of positive and negative samples (not combined) for each sample
-  char_to_index: a dict mapping all characters in vocab to their indices (0 to vocab_size - 1)
+  char_to_index: a dict mapping all characters in vocab to their indices (0 to vocab_size)
   unique_classes: number of unqiue classes in the dataset
+  sample_per_categ: is the number of positive and negative samples (combined) for each sample
+  negative_samples_ratio: ratio of negative to postive samples
 
-  returns 'num_pos_neg' positve and negative samples for each sample
+  returns 'sample_per_categ' positve and negative samples for each sample
   for negative samples randomly choose another class
 
   new_X: shape(n, 2, Tx)
   new_y: shape(n,)
   n is the new number of samples , which could be different that the original (m)
-  n = num_pos_neg * 2 * unique_classes
+  n = sample_per_categ * unique_classes
   """
 
   X = X.copy()
@@ -137,43 +141,64 @@ def pre_process_dataset_training(X, Y, Tx, char_to_index, unique_classes = 500, 
       if Y[i] != Y[i - 1]:
         start_new_category.append(i)
 
-
   # make positive and negative samples
-  n = (num_pos_neg * 2 * unique_classes)
+  n = (sample_per_categ * unique_classes)
   new_X = np.zeros((n, 2, Tx))
   new_y = np.full((n,), -1)
-  j = 0
-  i = 0
-  count = 0
-  while(True):
 
-    if count == n:
-      break
+  num_positive_samples = int(sample_per_categ * (1 - negative_samples_ratio))
+  num_negative_samples =  int(sample_per_categ * negative_samples_ratio)
 
-    if count % (num_pos_neg * 2) == 0 and count != 0:
-      j += 1
-      if j == len(start_new_category) - 1:
-        break
-      i = start_new_category[j]
+  # positive samples
+  for i in range(unique_classes): # 0 to 499
+    for j in range(num_positive_samples): # 0 to 239
 
-    new_X[count, 0, :] = indices_X[i, :]
-    new_X[count, 1, :] = indices_y[i, :]
-    new_y[count] = 1
+      first_index = start_new_category[i]
+      # last category
+      if i == len(start_new_category) - 1:
+        last_index = len(X)
+      else:
+        last_index = start_new_category[i + 1] - 1
 
-    # random index for negative samples (not similar)
-    rand_index = np.random.randint(low= 0, high= X.shape[0], size=1)[0]
-    # if the random index is the same category as current category, get another index
-    while np.array_equal(indices_y[rand_index, :], indices_y[i, :]):
+      # index for indices_X and indices_y
+      index = np.random.randint(first_index, last_index, size = 1)
+
+      # positive sample
+      new_X[int(j + (i * sample_per_categ * (1 - negative_samples_ratio))) , 0, :] = indices_X[index, :]
+      new_X[int(j + (i * sample_per_categ * (1 - negative_samples_ratio))) , 1, :] = indices_y[index, :]
+      new_y[int(j + (i * sample_per_categ * (1 - negative_samples_ratio)))] = 1
+
+
+  # starting index
+  start = unique_classes * (sample_per_categ * (1 - negative_samples_ratio))
+  # negative samples
+  for i in range(unique_classes): # 0 to 499
+    for j in range(num_negative_samples): # 0 to 239
+
+      first_index = start_new_category[i]
+      # last category
+      if i == len(start_new_category) - 1:
+        last_index = len(X)
+      else:
+        last_index = start_new_category[i + 1] - 1
+
+      # index for indices_X and indices_y
+      # choose index from current category
+      index = np.random.randint(first_index, last_index, size = 1)
+
+      # random index for negative samples (not similar)
       rand_index = np.random.randint(low= 0, high= X.shape[0], size=1)[0]
+      # if the random index is the same category as current category, get another index
+      while first_index <= rand_index < last_index:
+        rand_index = np.random.randint(low= 0, high= X.shape[0], size=1)[0]
 
-    new_X[count + 1, 0, :] = indices_X[i + 1, :]
-    new_X[count + 1, 1, :] = indices_y[rand_index, :]
-    new_y[count + 1] = 0
 
-    i += 1
-    count += 2
+      # negative sample
+      new_X[int(j + start + (i * sample_per_categ * negative_samples_ratio)) , 0, :] = indices_X[index, :]
+      new_X[int(j + start + (i * sample_per_categ * negative_samples_ratio)) , 1, :] = indices_y[rand_index, :]
+      new_y[int(j + start + (i * sample_per_categ * negative_samples_ratio))] = 0
 
-  return new_X, new_y
+  return new_X[new_y != -1], new_y[new_y != -1]
 
 
 def pre_process_input(sentence1, sentence2, Tx, char_to_index):
@@ -192,24 +217,76 @@ def pre_process_input(sentence1, sentence2, Tx, char_to_index):
 
   return tf.one_hot(x, depth=len(char_to_index), axis=-1)
 
+def get_binary_preds(pred_sentences, input, pred_numbers):
+  """
+  pred_sentences: numpy array of top predicted sentences
+  input: input_sentence -> string
+  pred_numbers: the model's predictions of each name in pred_sentences
+  """
+  if isinstance(input, (pd.DataFrame, pd.Series)):
+    input = input.values
 
-def get_prediction(model, input_sentences, Tx, char_to_index ,targets):
+  if isinstance(pred_sentences, (pd.DataFrame, pd.Series)):
+    pred_sentences = pred_sentences.values
+
+  assert pred_sentences.ndim == 1, "Not a numpy array"
+
+  input = apply_regex(input)
+
+  # add spaces between numbers to make ease matching
+  pattern = r'(?<=[0-9])(?=[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF])|(?<=[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF])(?=[0-9])'
+  input = re.sub(pattern, ' ', input)
+
+  for i in range(len(pred_sentences.copy())):
+    pred_sentences[i] = re.sub(pattern, ' ', pred_sentences[i])
+
+  matches = process.extract(input, pred_sentences, scorer=fuzz.token_set_ratio, limit=5)
+
+  fuzzy_pred = matches[0][1]
+
+  idx = pred_sentences == matches[0][0]
+  model_pred = pred_numbers[idx][0] * 100
+
+  threshold = 55
+
+  # if fuzzy similarity score less than model's similarity score , take the model's predictions
+  if fuzzy_pred < threshold:
+    return (pred_sentences[idx][0], model_pred) , np.array(model_pred > 95).astype(np.float32)
+
+  return matches[0], np.array(float(matches[0][1]) > threshold).astype(np.float32)
+
+def get_prediction(model, input_sentences, Tx, char_to_index , targets):
   """
   model: the loaded model
   input_sentences: array of strings of medication names
   Tx: sequence length
   char_to_index: a dict mapping characters to indices
-  targets: 1D array of formatted Arabic target names 
-  
-  get prediction using 'input_sentences' from the master file
+  targets: 1D array of formatted arabic target names
+
+  get prediction using 'input_sentences' from 'targets' array
 
   Returns:
-    matched name, probability
+    - Pandas DataFrame : contains input sentences , matched strings, and probability
+     - Binary predictions : 1D numpy array of shape (len(input_sentences) * len(targets)) ,
+                      this array only contains 0 or 1. every name in 'input_sentences' is
+                      matched against every name in 'targets'. If similar then 1 , else 0
   """
-
   assert targets.ndim == 1 , "Targets array is not 1-dimensional"
   assert input_sentences.ndim == 1 , "Input array is not 1-dimensional"
-  
+
+  if isinstance(targets, (pd.DataFrame, pd.Series)):
+    targets = targets.values
+
+  if isinstance(input_sentences, (pd.DataFrame, pd.Series)):
+    input_sentences = input_sentences.values
+
+  # clean target names
+  target_to_idx = {}
+  pattern = r'(?<=[0-9])(?=[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF])|(?<=[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF])(?=[0-9])'
+  for idx, name in enumerate(targets):
+    name = re.sub(pattern, ' ', name)
+    target_to_idx.update({name: idx})
+
   # shape (targets[0], Tx)
   targets_indices = np.expand_dims(pre_process_strings(targets, Tx, char_to_index), 1)
 
@@ -218,24 +295,41 @@ def get_prediction(model, input_sentences, Tx, char_to_index ,targets):
   # repeat input to try to match it with each sentence in targets
   input_repeated = np.expand_dims(np.repeat(input_indices, targets.shape[0], axis=0), 1)
 
-  # targets_indices_repeated = np.concatenate([targets_indices, targets_indices], axis=0)
-
   targets_indices_repeated = np.tile(targets_indices, (len(input_sentences), 1, 1))
 
   concat_indices = np.concatenate((targets_indices_repeated, input_repeated), axis=1)
 
   model_input = tf.one_hot(concat_indices, depth =len(char_to_index), axis=-1)
+  # model predictions
+  preds = model.predict(model_input, batch_size=1024).reshape(len(input_sentences), targets.shape[0])
 
-  preds = model.predict(model_input, batch_size=64).reshape(len(input_sentences), targets.shape[0])
+  # true 0/1 predictions
+  binary_preds = np.zeros((len(input_sentences) * targets.shape[0],))
 
-  # index of the biggest probab
-  index = np.argmax(preds, axis = 1)
+  # true indices for targets
+  for_targets = []
+
+  probabs = []
+
+  # get indices of the top 5 predictions
+  top_indices = np.argpartition(preds, -5)[:, -5:]
+
+  for i in range(len(input_sentences)):
+    matched , binary = get_binary_preds(targets[top_indices[i]] , input_sentences[i], preds[i, top_indices[i]] )
+
+    idx = target_to_idx[matched[0]]
+
+    for_targets.append(idx)
+
+    binary_preds[ idx + (i * 1000)] = binary
+
+    probabs.append(matched[1])
+
 
   return pd.DataFrame({
-      "Probability": np.max(preds, 1),
-      "Matched": targets[index],
+      "Probability": probabs,
+      "Matched": targets[for_targets],
       "Input":input_sentences,
+  }, index = range(len(input_sentences))) , binary_preds
 
-  })
-  # return np.max(preds, 1), targets[index]
 
