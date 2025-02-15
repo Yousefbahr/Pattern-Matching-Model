@@ -47,7 +47,8 @@ In the `testing_model` file, uncomment the following and provide a numpy 1D arra
 
 - You could provide a list of input names and/or targets from a file
 - Both arrays must be numpy.
-  
+- For more details, take a look at the Jupiter Notebook file `model.ipynb`.
+
 Here's a demo.
 
 ````
