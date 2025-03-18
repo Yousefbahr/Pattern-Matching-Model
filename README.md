@@ -40,6 +40,10 @@ The target is of shape (m, ) where each value is either 1 or 0.
 
 In the `testing_model.py` file, uncomment the following and provide an Excel file **with the same column names as in the file `input_file.xlsx`**, which represents the input names, and the Excel master file.
 
+  - `input_file.xlsx` has 2 columns:
+    - item_code: which isn't necessary for pattern matching
+    - product_name: which consists of input unformatted names,
+
   - It outputs an Excel file with the same structure as  `input_file.xlsx` with two columns added:
     - sku: representing the code of the formatted name
     - item_name: formatted name
