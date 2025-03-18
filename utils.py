@@ -364,8 +364,8 @@ def get_prediction(first_model, file_input, Tx, char_to_index, file_targets="Pro
   # get indices of the top 5 predictions
   top_indices = np.argpartition(preds, -5)[:, -5:]
 
-  # maintain indices to get the sku from them
-  indices = []
+  # maintain sku
+  sku = []
   for i in range(len(input_sentences)):
     matched, binary = get_binary_preds(targets[top_indices[i]], input_sentences[i], preds[i, top_indices[i]])
 
@@ -375,18 +375,18 @@ def get_prediction(first_model, file_input, Tx, char_to_index, file_targets="Pro
     # no match
     if binary == 0:
       final_targets.append("No Match")
+      sku.append(-1)
 
     else:
       final_targets.append(targets[idx])
-
-    indices.append(idx)
+      sku.append(target_sku[idx])
 
     binary_preds[idx + (i * 1000)] = binary
 
     probabs.append(matched[1])
 
   output_df["item_name"] = final_targets
-  output_df["sku"] = target_sku[indices].values
+  output_df["sku"] = sku
 
   output_df.to_excel("output.xlsx")
 
