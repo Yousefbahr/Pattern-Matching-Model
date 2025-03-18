@@ -111,29 +111,30 @@ def main():
                        83242, 83402]
     indices = []
     # random data points
-    for i in range(number_of_categ):
-        categ = np.random.randint(0, 499)
-        indices.append(np.random.randint(start_new_categ[categ], start_new_categ[categ + 1] - 1))
+    # for i in range(number_of_categ):
+    #     categ = np.random.randint(0, 499)
+    #     indices.append(np.random.randint(start_new_categ[categ], start_new_categ[categ + 1] - 1))
+    #
+    # x_test_best = seller_item_name[indices]
 
-    x_test_best = seller_item_name[indices]
 
     df, preds = get_prediction(loaded_model,
-                               x_test_best,
+                               "input_file.xlsx",
                                Tx,
                                char_to_index,
-                               target["product_name_ar"])
+                               "Product Matching Dataset.xlsx")
 
-    y_test_best = np.zeros((len(x_test_best) * 1000,))
-    # get true label test set
-    for i in range(len(x_test_best)):
-        sku = sku_values[indices[i]]
-        index_master_file = np.where(target["sku"] == sku)[0][0] + (i * 1000)
-        y_test_best[index_master_file] = 1
+    # y_test_best = np.zeros((len(x_test_best) * 1000,))
+    # # get true label test set
+    # for i in range(len(x_test_best)):
+    #     sku = sku_values[indices[i]]
+    #     index_master_file = np.where(target["sku"] == sku)[0][0] + (i * 1000)
+    #     y_test_best[index_master_file] = 1
 
-    print(df)
-    print(confusion_matrix(y_test_best, preds))
-    print(precision_score(y_test_best, preds))
-    print(recall_score(y_test_best, preds))
+    # print(df)
+    # print(confusion_matrix(y_test_best, preds))
+    # print(precision_score(y_test_best, preds))
+    # print(recall_score(y_test_best, preds))
 
 if __name__ == "__main__":
     main()
