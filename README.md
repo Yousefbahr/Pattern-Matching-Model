@@ -1,8 +1,8 @@
 # Product-Matching-Model
 The model uses a Siamese network for pattern matching to identify medication names. It accepts inputs in either Arabic or English and calculates a similarity score between the input and entries in a database of formatted medication names. The Siamese network compares the input against each database entry and computes a similarity degree, returning the top k most similar candidates. To refine this process, a string matching algorithm is applied to identify and return the most similar medication name.
 
-- **When the model identifies a match as similar, it is accurate 95% of the time.**
-- **The model successfully classifies 91% of all similar matches correctly.**
+- **When the model identifies a match as similar, it is accurate 96% of the time.**
+- **The model successfully classifies 96% of all similar matches correctly.**
 - **The process of finding a match takes between 200 and 400 milliseconds.**
 
 
@@ -38,15 +38,15 @@ The target is of shape (m, ) where each value is either 1 or 0.
 
 ### Predicting the similarity between a list of unformatted and target formatted names
 
-In the `testing_model` file, uncomment the following and provide a numpy 1D array of names for the input and another numpy 1D array of targets.
-- `get_prediction` function takes a model instance, a numpy array of names for the inputs and another of targets.
-  
+In the `testing_model.py` file, uncomment the following and provide an Excel file **with the same column names as in the file `input_file.xlsx`**, which represents the input names, and the Excel master file.
+
+  - It outputs an Excel file with the same structure as  `input_file.xlsx` with two columns added:
+    - sku: representing the code of the formatted name
+    - item_name: formatted name
+    
   - It outputs a `Panda DataFrame` of the inputs, matched names, and the probability for each input name.
   - It also outputs a prediction 1D array of length `number of input names * number of target names`. The input is matched with every name in the               'targets' array. The output is a binary array of only zeros or ones indicating similar or not.
   
-
-- You could provide a list of input names and/or targets from a file
-- Both arrays must be numpy.
 - For more details, take a look at the Jupiter Notebook file `model.ipynb`.
 
 Here's a demo.
@@ -56,24 +56,11 @@ from utils import *
 from model import Tx, char_to_index
 
 loaded_model = load_model("model.keras", custom_objects={"Model":Model})
-targets = pd.read_excel("Product Matching Dataset.xlsx", sheet_name="Master File")["product_name_ar"]
 
-input = np.array( ["الفانوفا ركزززز",
-        "بانادووووول"])
+target_file = "Product Matching Dataset.xlsx"
+input_file = "input_file.xlsx"
 
-df, preds = get_prediction(loaded_model, input, Tx, char_to_index, targets)
-print(df)
-````
-Output:
-
-| Index       | Probability | Matched   |  Input   |
-|------------|--------------|--------------| --------------|
-| 0      | 0.986129  |     الفانوفا 20 قرص  |الفانوفا ركزززز   |
-| 1        | 0.984625  |  بانادول اكسترا 30 قرص   | بانادووووول	     |
-
-                                              
-
-
-
+# to predict the similarity between a list of unformatted and target formatted names, uncomment the following
+df, preds = get_prediction(loaded_model, input_file, Tx, char_to_index, target_file)
 
  
