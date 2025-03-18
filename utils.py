@@ -5,6 +5,7 @@ import re
 import tensorflow as tf
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, confusion_matrix, precision_score, recall_score
+
 from tensorflow.keras.layers import Bidirectional, Concatenate, Permute, Dot, Input, LSTM, Multiply, Softmax, Reshape, Embedding
 from tensorflow.keras.layers import RepeatVector, Dense, Activation, Lambda, Masking, Dropout
 from tensorflow.keras.optimizers import Adam
@@ -88,8 +89,8 @@ def pre_process_strings(x, Tx, char_to_index, pad_value= -1):
   Returns:
     indices: shape(x.shape[0], Tx)
   """
-
-  for i, sentence in enumerate(x.copy()):
+  x = x.copy()
+  for i, sentence in enumerate(x):
     x[i] = apply_regex(sentence)
 
   indices = np.full((len(x), Tx), pad_value)
@@ -217,9 +218,10 @@ def pre_process_input(sentence1, sentence2, Tx, char_to_index):
 
   return tf.one_hot(x, depth=len(char_to_index), axis=-1)
 
+
 def get_binary_preds(pred_sentences, input, pred_numbers):
   """
-  pred_sentences: numpy array of top predicted sentences
+  pred_sentences: numpy array of top target 10 predicted sentences
   input: input_sentence -> string
   pred_numbers: the model's predictions of each name in pred_sentences
   """
@@ -233,46 +235,93 @@ def get_binary_preds(pred_sentences, input, pred_numbers):
 
   input = apply_regex(input)
 
-  # add spaces between numbers to make ease matching
+  # add spaces between numbers to ease matching
   pattern = r'(?<=[0-9])(?=[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF])|(?<=[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF])(?=[0-9])'
   input = re.sub(pattern, ' ', input)
+  input = re.sub( r"[أآإٱا]" , "ا", input)
+  input = re.sub(r"[هة]", "ه", input)
 
   for i in range(len(pred_sentences.copy())):
-    pred_sentences[i] = re.sub(pattern, ' ', pred_sentences[i])
+    sent = re.sub(pattern, ' ', pred_sentences[i])
+    sent = re.sub(r"[أآإٱا]" , "ا", sent)
+    sent = re.sub(r"[هة]", "ه", sent)
+    pred_sentences[i] = sent
+
 
   matches = process.extract(input, pred_sentences, scorer=fuzz.token_set_ratio, limit=5)
 
+  # if first two predictions have same probability within a margin, use another algorithm
+  # or if first two candidates are of same number of words and differ only in the number of units (which is mainly the second word in the name)
+  # use a different algorithm
+  first_match_words = matches[0][0].split()
+  sec_match_words = matches[1][0].split()
+
+
+  if (len(first_match_words) == len(sec_match_words) and first_match_words[1] != sec_match_words[1]) or matches[0][1] - matches[1][1] <= 5 :
+      matches = process.extract(input, pred_sentences, scorer=fuzz.ratio, limit=5)
+
+
+  # if same probability , use another alg
+  if matches[0][1] == matches[1][1]:
+      matches = process.extract(input, pred_sentences, scorer=fuzz.partial_ratio, limit=5)
+
   fuzzy_pred = matches[0][1]
+  idx_model_pred = pred_sentences == matches[0][0]
+  model_pred = pred_numbers[idx_model_pred][0] * 100
 
-  idx = pred_sentences == matches[0][0]
-  model_pred = pred_numbers[idx][0] * 100
 
-  threshold = 55
+  fuzzy_threshold = 56
+  model_threshold = 95
 
-  # if fuzzy similarity score less than model's similarity score , take the model's predictions
-  if fuzzy_pred < threshold:
-    return (pred_sentences[idx][0], model_pred) , np.array(model_pred > 95).astype(np.float32)
+  if fuzzy_pred < fuzzy_threshold:
 
-  return matches[0], np.array(float(matches[0][1]) > threshold).astype(np.float32)
+    # return match with model's probability
+    if model_pred >= model_threshold:
+      return (pred_sentences[idx_model_pred][0], model_pred) , np.array(1).astype(np.float32)
+    # return not a match with fuzzy probability
+    else:
+      return (pred_sentences[idx_model_pred][0], fuzzy_pred) , np.array(0).astype(np.float32)
 
-def get_prediction(model, input_sentences, Tx, char_to_index , targets):
+
+  return matches[0], np.array(float(fuzzy_pred) >= fuzzy_threshold).astype(np.float32)
+
+
+def get_prediction(first_model, file_input, Tx, char_to_index, file_targets="Product Matching Dataset.xlsx"):
   """
-  model: the loaded model
-  input_sentences: array of strings of medication names
-  Tx: sequence length
-  char_to_index: a dict mapping characters to indices
-  targets: 1D array of formatted arabic target names
+  Parms:
+  - model: the loaded model
 
-  get prediction using 'input_sentences' from 'targets' array
+  - file_input: excel file that contains the unformatted names with three
+    columns: "item_code", "product_name", "price
+
+  - Tx: sequence length
+
+  - char_to_index: a dict mapping characters to indices
+
+  - file_targets: the master file with formatted names
+
+  outputs an excel file with the same structure as 'file_input' with two more
+  columns: sku, item_name.
 
   Returns:
-    - Pandas DataFrame : contains input sentences , matched strings, and probability
-     - Binary predictions : 1D numpy array of shape (len(input_sentences) * len(targets)) ,
-                      this array only contains 0 or 1. every name in 'input_sentences' is
-                      matched against every name in 'targets'. If similar then 1 , else 0
+    - dataframe of probabilites, matched names, and input names
+    - binary array of 0/1
   """
-  assert targets.ndim == 1 , "Targets array is not 1-dimensional"
-  assert input_sentences.ndim == 1 , "Input array is not 1-dimensional"
+  input_dataframe = pd.read_excel(file_input)
+  target_dataframe = pd.read_excel(file_targets, sheet_name="Master File")
+
+  # unformatted names
+  input_sentences = input_dataframe["product_name"]
+
+  # formatted names
+  targets = target_dataframe["product_name_ar"]
+  target_sku = target_dataframe["sku"]
+
+  # output file with sku
+  output_df = input_dataframe.copy()
+
+  assert targets.ndim == 1, "Targets array is not 1-dimensional"
+  assert input_sentences.ndim == 1, "Input array is not 1-dimensional"
 
   if isinstance(targets, (pd.DataFrame, pd.Series)):
     targets = targets.values
@@ -280,11 +329,12 @@ def get_prediction(model, input_sentences, Tx, char_to_index , targets):
   if isinstance(input_sentences, (pd.DataFrame, pd.Series)):
     input_sentences = input_sentences.values
 
-  # clean target names
   target_to_idx = {}
   pattern = r'(?<=[0-9])(?=[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF])|(?<=[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF])(?=[0-9])'
   for idx, name in enumerate(targets):
     name = re.sub(pattern, ' ', name)
+    name = re.sub(r"[أآإٱا]", "ا", name)
+    name = re.sub(r"[هة]", "ه", name)
     target_to_idx.update({name: idx})
 
   # shape (targets[0], Tx)
@@ -299,37 +349,54 @@ def get_prediction(model, input_sentences, Tx, char_to_index , targets):
 
   concat_indices = np.concatenate((targets_indices_repeated, input_repeated), axis=1)
 
-  model_input = tf.one_hot(concat_indices, depth =len(char_to_index), axis=-1)
+  model_input = tf.one_hot(concat_indices, depth=len(char_to_index), axis=-1)
   # model predictions
-  preds = model.predict(model_input, batch_size=1024).reshape(len(input_sentences), targets.shape[0])
+  preds = first_model.predict(model_input, batch_size=1024).reshape(len(input_sentences), targets.shape[0])
 
   # true 0/1 predictions
   binary_preds = np.zeros((len(input_sentences) * targets.shape[0],))
 
-  # true indices for targets
-  for_targets = []
+  # output
+  final_targets = []
 
   probabs = []
 
   # get indices of the top 5 predictions
   top_indices = np.argpartition(preds, -5)[:, -5:]
 
+  # maintain indices to get the sku from them
+  indices = []
   for i in range(len(input_sentences)):
-    matched , binary = get_binary_preds(targets[top_indices[i]] , input_sentences[i], preds[i, top_indices[i]] )
+    matched, binary = get_binary_preds(targets[top_indices[i]], input_sentences[i], preds[i, top_indices[i]])
 
+    # print(matched)
     idx = target_to_idx[matched[0]]
 
-    for_targets.append(idx)
+    # no match
+    if binary == 0:
+      final_targets.append("No Match")
 
-    binary_preds[ idx + (i * 1000)] = binary
+    else:
+      final_targets.append(targets[idx])
+
+    indices.append(idx)
+
+    binary_preds[idx + (i * 1000)] = binary
 
     probabs.append(matched[1])
 
+  output_df["item_name"] = final_targets
+  output_df["sku"] = target_sku[indices].values
+
+  output_df.to_excel("output.xlsx")
 
   return pd.DataFrame({
-      "Probability": probabs,
-      "Matched": targets[for_targets],
-      "Input":input_sentences,
-  }, index = range(len(input_sentences))) , binary_preds
+    "Probability": probabs,
+    "Matched": final_targets,
+    "Input": input_sentences,
+  }, index=range(len(input_sentences))), binary_preds
+
+
+
 
 
