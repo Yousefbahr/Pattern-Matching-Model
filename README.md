@@ -1,8 +1,7 @@
 # Pattern-Matching-Model
 The model uses a Siamese network for pattern matching to identify medication names. It accepts inputs in either Arabic or English and calculates a similarity score between the input and entries in a database of formatted medication names. The Siamese network compares the input against each database entry and computes a similarity degree, returning the top k most similar candidates. To refine this process, a string matching algorithm is applied to identify and return the most similar medication name.
 
-- **When the model identifies a match as similar, it is accurate 96% of the time.**
-- **The model successfully classifies 96% of all similar matches correctly.**
+- **The model attained an F1-score of 0.96.**
 - **The process of finding a match takes between 200 and 400 milliseconds.**
 
 
